@@ -1,0 +1,24 @@
+AllCops:
+  TargetRubyVersion: 3.4
+
+Layout/LineLength:
+  Max: 120
+
+Lint/EmptyClass:
+  AllowComments: true
+
+Metrics/AbcSize:
+  Max: 25
+
+Metrics/MethodLength:
+  Max: 11
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/StringLiteralsInInterpolation:
+  EnforcedStyle: double_quotes
+
+Metrics/BlockLength:
+  Exclude:
+    - 'spec/**/*'

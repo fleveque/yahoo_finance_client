@@ -2,7 +2,7 @@
 
 A basic client to query Yahoo! Finance API.
 
-Work in process, it might work, or not :)
+Work in process, it might work, or not. It seems that Yahoo! disabled that kind of API access lately.
 
 It was created to support https://github.com/fleveque/dividend-portfolio pet project.
 

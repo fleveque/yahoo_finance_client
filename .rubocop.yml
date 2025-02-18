@@ -22,3 +22,4 @@ Style/StringLiteralsInInterpolation:
 Metrics/BlockLength:
   Exclude:
     - 'spec/**/*'
+    - 'yahoo_finance_client.gemspec'

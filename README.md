@@ -2,6 +2,8 @@
 
 A basic client to query Yahoo! Finance API.
 
+Work in process, it might work, or not :)
+
 It was created to support https://github.com/fleveque/dividend-portfolio pet project.
 
 ## Installation
@@ -30,7 +32,10 @@ gem install yahoo_finance_client
 
 ## Usage
 
-TODO
+You should be able to get stock data by calling this method and passing a string with the stock ticker:
+```ruby
+YahooFinanceClient::Stock.get_quote("AAPL")
+```
 
 ## Development
 

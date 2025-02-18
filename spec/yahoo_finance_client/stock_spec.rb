@@ -6,7 +6,19 @@ require "webmock/rspec"
 RSpec.describe YahooFinanceClient::Stock do
   describe ".get_quote" do
     let(:symbol) { "AAPL" }
-    let(:url) { "https://query1.finance.yahoo.com/v7/finance/quote?symbols=#{symbol}" }
+    let(:quote_url) { "https://query1.finance.yahoo.com/v7/finance/quote?symbols=#{symbol}&crumb=test_crumb" }
+    let(:cookie_url) { "https://fc.yahoo.com" }
+    let(:crumb_url) { "https://query1.finance.yahoo.com/v1/test/getcrumb" }
+    let(:cookie) { "test_cookie" }
+    let(:crumb) { "test_crumb" }
+
+    before do
+      stub_request(:get, cookie_url)
+        .to_return(status: 200, headers: { "set-cookie" => cookie })
+      stub_request(:get, crumb_url)
+        .with(headers: { "Cookie" => cookie })
+        .to_return(status: 200, body: crumb)
+    end
 
     context "when the response is successful" do
       let(:response_body) do
@@ -26,7 +38,8 @@ RSpec.describe YahooFinanceClient::Stock do
       end
 
       before do
-        stub_request(:get, url).to_return(status: 200, body: response_body)
+        stub_request(:get, quote_url)
+          .to_return(status: 200, body: response_body)
       end
 
       it "returns the quote data" do
@@ -43,7 +56,8 @@ RSpec.describe YahooFinanceClient::Stock do
 
     context "when the response is unsuccessful" do
       before do
-        stub_request(:get, url).to_return(status: 500)
+        stub_request(:get, quote_url)
+          .to_return(status: 500)
       end
 
       it "returns an error message" do
@@ -62,7 +76,8 @@ RSpec.describe YahooFinanceClient::Stock do
       end
 
       before do
-        stub_request(:get, url).to_return(status: 200, body: response_body)
+        stub_request(:get, quote_url)
+          .to_return(status: 200, body: response_body)
       end
 
       it "returns an error message" do

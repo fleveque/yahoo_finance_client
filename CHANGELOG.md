@@ -1,5 +1,13 @@
 # Change Log
 
+## [0.1.6] - 2025-02-18
+
+- Adding a simple cache
+
+## [0.1.5] - 2025-02-18
+
+- Change User Agent so Yahoo requests work
+
 ## [0.1.4] - 2025-02-18
 
 - Fix version & Gemfile.lock issues

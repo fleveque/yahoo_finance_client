@@ -6,15 +6,18 @@ require "webmock/rspec"
 RSpec.describe YahooFinanceClient::Stock do
   describe ".get_quote" do
     let(:symbol) { "AAPL" }
-    let(:quote_url) { "https://query1.finance.yahoo.com/v7/finance/quote?symbols=#{symbol}&crumb=test_crumb" }
+    let(:base_url) { "https://query1.finance.yahoo.com" }
+    let(:quote_url) { "#{base_url}/v7/finance/quote?symbols=#{symbol}&crumb=#{crumb}" }
     let(:cookie_url) { "https://fc.yahoo.com" }
     let(:crumb_url) { "https://query1.finance.yahoo.com/v1/test/getcrumb" }
     let(:cookie) { "test_cookie" }
     let(:crumb) { "test_crumb" }
     let(:cache_key) { "quote_#{symbol}" }
+    let(:session) { YahooFinanceClient::Session.instance }
 
     before do
       described_class.instance_variable_set(:@cache, {}) # Clear the cache
+      session.send(:reset!) # Reset session state
       stub_request(:get, cookie_url)
         .to_return(status: 200, headers: { "set-cookie" => cookie })
       stub_request(:get, crumb_url)
@@ -71,7 +74,6 @@ RSpec.describe YahooFinanceClient::Stock do
     context "when the response is unsuccessful" do
       before do
         stub_request(:get, quote_url)
-          .with(headers: { "User-Agent" => YahooFinanceClient::Stock::USER_AGENT })
           .to_return(status: 500, body: "")
       end
 
@@ -176,6 +178,95 @@ RSpec.describe YahooFinanceClient::Stock do
         )
         cache = described_class.instance_variable_get(:@cache)
         expect(cache[cache_key][:data]).to eq(
+          symbol: "AAPL",
+          price: 150.0,
+          change: 1.5,
+          percent_change: 1.0,
+          volume: 100_000
+        )
+      end
+    end
+
+    context "when authentication fails and retries succeed" do
+      let(:response_body) do
+        {
+          "quoteResponse" => {
+            "result" => [
+              {
+                "symbol" => "AAPL",
+                "regularMarketPrice" => 150.0,
+                "regularMarketChange" => 1.5,
+                "regularMarketChangePercent" => 1.0,
+                "regularMarketVolume" => 100_000
+              }
+            ]
+          }
+        }.to_json
+      end
+
+      before do
+        # First request returns auth error, second succeeds
+        stub_request(:get, quote_url)
+          .to_return(
+            { status: 200, body: '{"error": "Invalid Cookie"}' },
+            { status: 200, body: response_body }
+          )
+      end
+
+      it "retries and returns the quote data" do
+        result = described_class.get_quote(symbol)
+        expect(result).to eq(
+          symbol: "AAPL",
+          price: 150.0,
+          change: 1.5,
+          percent_change: 1.0,
+          volume: 100_000
+        )
+      end
+    end
+
+    context "when authentication fails after max retries" do
+      before do
+        stub_request(:get, quote_url)
+          .to_return(status: 401, body: "Unauthorized")
+      end
+
+      it "returns an authentication error message" do
+        result = described_class.get_quote(symbol)
+        expect(result).to eq(error: "Authentication failed after 2 retries")
+      end
+    end
+
+    context "when response contains 'invalid crumb' error" do
+      let(:response_body) do
+        {
+          "quoteResponse" => {
+            "result" => [
+              {
+                "symbol" => "AAPL",
+                "regularMarketPrice" => 150.0,
+                "regularMarketChange" => 1.5,
+                "regularMarketChangePercent" => 1.0,
+                "regularMarketVolume" => 100_000
+              }
+            ]
+          }
+        }.to_json
+      end
+
+      before do
+        # First two requests return crumb error, third succeeds
+        stub_request(:get, quote_url)
+          .to_return(
+            { status: 200, body: '{"error": "Invalid Crumb"}' },
+            { status: 200, body: '{"error": "Invalid Crumb"}' },
+            { status: 200, body: response_body }
+          )
+      end
+
+      it "retries on invalid crumb errors" do
+        result = described_class.get_quote(symbol)
+        expect(result).to eq(
           symbol: "AAPL",
           price: 150.0,
           change: 1.5,

@@ -6,90 +6,77 @@ require "json"
 module YahooFinanceClient
   # This class provides methods to interact with Yahoo Finance API for stock data.
   class Stock
-    BASE_URL = "https://query1.finance.yahoo.com/v7/finance/quote"
-    COOKIE_URL = "https://fc.yahoo.com"
-    CRUMB_URL = "https://query1.finance.yahoo.com/v1/test/getcrumb"
-    USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64)"
-    CACHE_TTL = 300 # Cache time-to-live in seconds (e.g., 5 minutes)
+    QUOTE_PATH = "/v7/finance/quote"
+    CACHE_TTL = 300
+    MAX_RETRIES = 2
+    AUTH_ERROR_PATTERNS = [/invalid cookie/i, /invalid crumb/i, /unauthorized/i].freeze
 
     @cache = {}
 
     class << self
       def get_quote(symbol)
         cache_key = "quote_#{symbol}"
-        cached_data = fetch_from_cache(cache_key)
+        fetch_from_cache(cache_key) || fetch_and_cache(cache_key, symbol)
+      end
 
-        return cached_data if cached_data
+      private
 
+      def fetch_and_cache(cache_key, symbol)
         data = fetch_quote_data(symbol)
         store_in_cache(cache_key, data) if data[:error].nil?
         data
       end
 
-      private
-
       def fetch_quote_data(symbol)
-        cookie = fetch_cookie
-        crumb = fetch_crumb(cookie)
-        url = build_url(symbol, crumb)
-        pp url
-        response = HTTParty.get(url, headers: { "User-Agent" => USER_AGENT })
-
-        if response.success?
-          parse_response(response.body, symbol)
-        else
-          { error: "Yahoo Finance connection failed" }
+        retries = 0
+        begin
+          response = make_authenticated_request(symbol)
+          handle_response(response, symbol)
+        rescue AuthenticationError
+          retries += 1
+          retry if retries <= MAX_RETRIES
+          { error: "Authentication failed after #{MAX_RETRIES} retries" }
         end
       end
 
-      def build_url(symbol, crumb)
-        "#{BASE_URL}?symbols=#{symbol}&crumb=#{crumb}"
+      def make_authenticated_request(symbol)
+        session = Session.instance
+        session.ensure_authenticated
+        url = "#{session.base_url}#{QUOTE_PATH}?symbols=#{symbol}&crumb=#{session.crumb}"
+        HTTParty.get(url, headers: { "User-Agent" => Session::USER_AGENT, "Cookie" => session.cookie })
       end
 
-      def fetch_cookie
-        response = HTTParty.get(COOKIE_URL, headers: { "User-Agent" => USER_AGENT })
-        response.headers["set-cookie"]
+      def handle_response(response, symbol)
+        if auth_error?(response)
+          Session.instance.invalidate!
+          raise AuthenticationError, "Authentication failed"
+        end
+        response.success? ? parse_response(response.body, symbol) : { error: "Yahoo Finance connection failed" }
       end
 
-      def fetch_crumb(cookie)
-        response = HTTParty.get(CRUMB_URL, headers: { "User-Agent" => USER_AGENT, "Cookie" => cookie })
-        response.body
+      def auth_error?(response)
+        response.code == 401 || AUTH_ERROR_PATTERNS.any? { |p| response.body.to_s.match?(p) }
       end
 
       def parse_response(body, symbol)
-        data = JSON.parse(body)
-        quote = data.dig("quoteResponse", "result", 0)
-
-        if quote
-          format_quote(quote)
-        else
-          { error: "No data was found for #{symbol}" }
-        end
+        quote = JSON.parse(body).dig("quoteResponse", "result", 0)
+        quote ? format_quote(quote) : { error: "No data was found for #{symbol}" }
       end
 
       def format_quote(quote)
-        {
-          symbol: quote["symbol"],
-          price: quote["regularMarketPrice"],
-          change: quote["regularMarketChange"],
-          percent_change: quote["regularMarketChangePercent"],
-          volume: quote["regularMarketVolume"]
-        }
+        { symbol: quote["symbol"], price: quote["regularMarketPrice"], change: quote["regularMarketChange"],
+          percent_change: quote["regularMarketChangePercent"], volume: quote["regularMarketVolume"] }
       end
 
       def fetch_from_cache(key)
         cached_entry = @cache[key]
-        return unless cached_entry
+        return unless cached_entry && Time.now - cached_entry[:timestamp] < CACHE_TTL
 
-        if Time.now - cached_entry[:timestamp] < CACHE_TTL
-          cached_entry[:data]
-        else
-          @cache.delete(key)
-          nil
-        end
+        cached_entry[:data]
       end
 
       def store_in_cache(key, data)
+        @cache.delete_if { |_, v| Time.now - v[:timestamp] >= CACHE_TTL } if @cache.size > 100
         @cache[key] = { data: data, timestamp: Time.now }
       end
     end

@@ -64,8 +64,34 @@ module YahooFinanceClient
       end
 
       def format_quote(quote)
-        { symbol: quote["symbol"], price: quote["regularMarketPrice"], change: quote["regularMarketChange"],
-          percent_change: quote["regularMarketChangePercent"], volume: quote["regularMarketVolume"] }
+        price = quote["regularMarketPrice"]
+        dividend = quote["dividendRate"]
+        eps = quote["epsTrailingTwelveMonths"]
+
+        build_quote_hash(quote, price, dividend, eps)
+      end
+
+      def build_quote_hash(quote, price, dividend, eps)
+        {
+          symbol: quote["symbol"], name: quote["shortName"], price: price,
+          change: quote["regularMarketChange"], percent_change: quote["regularMarketChangePercent"],
+          volume: quote["regularMarketVolume"], pe_ratio: quote["trailingPE"], eps: eps,
+          dividend: dividend, dividend_yield: calculate_yield(dividend, price),
+          payout_ratio: calculate_payout(dividend, eps),
+          ma50: quote["fiftyDayAverage"], ma200: quote["twoHundredDayAverage"]
+        }
+      end
+
+      def calculate_yield(dividend, price)
+        return nil unless dividend && price&.positive?
+
+        (dividend / price * 100).round(2)
+      end
+
+      def calculate_payout(dividend, eps)
+        return nil unless dividend && eps&.positive?
+
+        (dividend / eps * 100).round(2)
       end
 
       def fetch_from_cache(key)

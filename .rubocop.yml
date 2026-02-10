@@ -10,6 +10,9 @@ Lint/EmptyClass:
 Metrics/AbcSize:
   Max: 25
 
+Metrics/ClassLength:
+  Max: 150
+
 Metrics/MethodLength:
   Max: 11
 

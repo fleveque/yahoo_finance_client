@@ -439,4 +439,244 @@ RSpec.describe YahooFinanceClient::Stock do
       end
     end
   end
+
+  describe ".get_quotes" do
+    let(:base_url) { "https://query1.finance.yahoo.com" }
+    let(:cookie_url) { "https://fc.yahoo.com" }
+    let(:crumb_url) { "https://query1.finance.yahoo.com/v1/test/getcrumb" }
+    let(:cookie) { "test_cookie" }
+    let(:crumb) { "test_crumb" }
+    let(:session) { YahooFinanceClient::Session.instance }
+
+    before do
+      described_class.instance_variable_set(:@cache, {})
+      session.send(:reset!)
+      stub_request(:get, cookie_url)
+        .to_return(status: 200, headers: { "set-cookie" => cookie })
+      stub_request(:get, crumb_url)
+        .with(headers: { "Cookie" => cookie })
+        .to_return(status: 200, body: crumb)
+    end
+
+    context "when fetching multiple symbols successfully" do
+      let(:symbols) { %w[AAPL MSFT] }
+      let(:batch_url) { "#{base_url}/v7/finance/quote?symbols=AAPL,MSFT&crumb=#{crumb}" }
+      let(:response_body) do
+        {
+          "quoteResponse" => {
+            "result" => [
+              {
+                "symbol" => "AAPL", "shortName" => "Apple Inc.",
+                "regularMarketPrice" => 150.0, "regularMarketChange" => 1.5,
+                "regularMarketChangePercent" => 1.0, "regularMarketVolume" => 100_000,
+                "trailingPE" => 25.5, "epsTrailingTwelveMonths" => 5.88,
+                "dividendRate" => 0.96, "fiftyDayAverage" => 148.5,
+                "twoHundredDayAverage" => 145.0
+              },
+              {
+                "symbol" => "MSFT", "shortName" => "Microsoft Corp.",
+                "regularMarketPrice" => 380.0, "regularMarketChange" => 2.0,
+                "regularMarketChangePercent" => 0.53, "regularMarketVolume" => 90_000,
+                "trailingPE" => 35.0, "epsTrailingTwelveMonths" => 10.86,
+                "dividendRate" => 3.0, "fiftyDayAverage" => 375.0,
+                "twoHundredDayAverage" => 360.0
+              }
+            ]
+          }
+        }.to_json
+      end
+
+      before do
+        stub_request(:get, batch_url)
+          .to_return(status: 200, body: response_body)
+      end
+
+      it "returns a hash of quotes keyed by symbol" do
+        result = described_class.get_quotes(symbols)
+        expect(result.keys).to match_array(%w[AAPL MSFT])
+        expect(result["AAPL"][:price]).to eq(150.0)
+        expect(result["MSFT"][:price]).to eq(380.0)
+      end
+
+      it "caches each symbol individually" do
+        described_class.get_quotes(symbols)
+        cache = described_class.instance_variable_get(:@cache)
+        expect(cache["quote_AAPL"][:data][:price]).to eq(150.0)
+        expect(cache["quote_MSFT"][:data][:price]).to eq(380.0)
+      end
+    end
+
+    context "when one symbol is not found" do
+      let(:symbols) { %w[AAPL INVALID] }
+      let(:batch_url) { "#{base_url}/v7/finance/quote?symbols=AAPL,INVALID&crumb=#{crumb}" }
+      let(:response_body) do
+        {
+          "quoteResponse" => {
+            "result" => [
+              {
+                "symbol" => "AAPL", "shortName" => "Apple Inc.",
+                "regularMarketPrice" => 150.0, "regularMarketChange" => 1.5,
+                "regularMarketChangePercent" => 1.0, "regularMarketVolume" => 100_000,
+                "trailingPE" => 25.5, "epsTrailingTwelveMonths" => 5.88,
+                "dividendRate" => 0.96, "fiftyDayAverage" => 148.5,
+                "twoHundredDayAverage" => 145.0
+              }
+            ]
+          }
+        }.to_json
+      end
+
+      before do
+        stub_request(:get, batch_url)
+          .to_return(status: 200, body: response_body)
+      end
+
+      it "returns data for found symbols and errors for missing ones" do
+        result = described_class.get_quotes(symbols)
+        expect(result["AAPL"][:price]).to eq(150.0)
+        expect(result["INVALID"]).to eq(error: "No data was found for INVALID")
+      end
+    end
+
+    context "when some symbols are cached" do
+      let(:symbols) { %w[AAPL MSFT] }
+      let(:batch_url) { "#{base_url}/v7/finance/quote?symbols=MSFT&crumb=#{crumb}" }
+      let(:cached_aapl) do
+        { symbol: "AAPL", name: "Apple Inc.", price: 150.0, change: 1.5,
+          percent_change: 1.0, volume: 100_000, pe_ratio: 25.5, eps: 5.88,
+          dividend: 0.96, dividend_yield: 0.64, payout_ratio: 16.33,
+          ma50: 148.5, ma200: 145.0 }
+      end
+      let(:response_body) do
+        {
+          "quoteResponse" => {
+            "result" => [
+              {
+                "symbol" => "MSFT", "shortName" => "Microsoft Corp.",
+                "regularMarketPrice" => 380.0, "regularMarketChange" => 2.0,
+                "regularMarketChangePercent" => 0.53, "regularMarketVolume" => 90_000,
+                "trailingPE" => 35.0, "epsTrailingTwelveMonths" => 10.86,
+                "dividendRate" => 3.0, "fiftyDayAverage" => 375.0,
+                "twoHundredDayAverage" => 360.0
+              }
+            ]
+          }
+        }.to_json
+      end
+
+      before do
+        described_class.instance_variable_set(
+          :@cache,
+          { "quote_AAPL" => { data: cached_aapl, timestamp: Time.now } }
+        )
+        stub_request(:get, batch_url)
+          .to_return(status: 200, body: response_body)
+      end
+
+      it "uses cache for cached symbols and fetches only uncached ones" do
+        result = described_class.get_quotes(symbols)
+        expect(result["AAPL"]).to eq(cached_aapl)
+        expect(result["MSFT"][:price]).to eq(380.0)
+      end
+    end
+
+    context "when symbols exceed BATCH_SIZE" do
+      let(:symbols) { (1..55).map { |i| "SYM#{i}" } }
+
+      before do
+        batch1_symbols = symbols[0...50].join(",")
+        batch2_symbols = symbols[50...55].join(",")
+
+        batch1_results = symbols[0...50].map do |sym|
+          { "symbol" => sym, "shortName" => sym, "regularMarketPrice" => 100.0,
+            "regularMarketChange" => 0, "regularMarketChangePercent" => 0,
+            "regularMarketVolume" => 1000, "trailingPE" => nil,
+            "epsTrailingTwelveMonths" => nil, "fiftyDayAverage" => nil,
+            "twoHundredDayAverage" => nil }
+        end
+
+        batch2_results = symbols[50...55].map do |sym|
+          { "symbol" => sym, "shortName" => sym, "regularMarketPrice" => 200.0,
+            "regularMarketChange" => 0, "regularMarketChangePercent" => 0,
+            "regularMarketVolume" => 1000, "trailingPE" => nil,
+            "epsTrailingTwelveMonths" => nil, "fiftyDayAverage" => nil,
+            "twoHundredDayAverage" => nil }
+        end
+
+        stub_request(:get, "#{base_url}/v7/finance/quote?symbols=#{batch1_symbols}&crumb=#{crumb}")
+          .to_return(status: 200, body: { "quoteResponse" => { "result" => batch1_results } }.to_json)
+        stub_request(:get, "#{base_url}/v7/finance/quote?symbols=#{batch2_symbols}&crumb=#{crumb}")
+          .to_return(status: 200, body: { "quoteResponse" => { "result" => batch2_results } }.to_json)
+      end
+
+      it "splits into multiple batches" do
+        result = described_class.get_quotes(symbols)
+        expect(result.size).to eq(55)
+        expect(result["SYM1"][:price]).to eq(100.0)
+        expect(result["SYM51"][:price]).to eq(200.0)
+      end
+    end
+
+    context "when symbols is empty" do
+      it "returns an empty hash" do
+        expect(described_class.get_quotes([])).to eq({})
+      end
+    end
+
+    context "when symbols is nil" do
+      it "returns an empty hash" do
+        expect(described_class.get_quotes(nil)).to eq({})
+      end
+    end
+
+    context "when authentication fails and retries succeed" do
+      let(:symbols) { %w[AAPL] }
+      let(:batch_url) { "#{base_url}/v7/finance/quote?symbols=AAPL&crumb=#{crumb}" }
+      let(:response_body) do
+        {
+          "quoteResponse" => {
+            "result" => [
+              {
+                "symbol" => "AAPL", "shortName" => "Apple Inc.",
+                "regularMarketPrice" => 150.0, "regularMarketChange" => 1.5,
+                "regularMarketChangePercent" => 1.0, "regularMarketVolume" => 100_000,
+                "trailingPE" => 25.5, "epsTrailingTwelveMonths" => 5.88,
+                "dividendRate" => 0.96, "fiftyDayAverage" => 148.5,
+                "twoHundredDayAverage" => 145.0
+              }
+            ]
+          }
+        }.to_json
+      end
+
+      before do
+        stub_request(:get, batch_url)
+          .to_return(
+            { status: 200, body: '{"error": "Invalid Cookie"}' },
+            { status: 200, body: response_body }
+          )
+      end
+
+      it "retries and returns the quote data" do
+        result = described_class.get_quotes(symbols)
+        expect(result["AAPL"][:price]).to eq(150.0)
+      end
+    end
+
+    context "when authentication fails after max retries" do
+      let(:symbols) { %w[AAPL MSFT] }
+      let(:batch_url) { "#{base_url}/v7/finance/quote?symbols=AAPL,MSFT&crumb=#{crumb}" }
+
+      before do
+        stub_request(:get, batch_url)
+          .to_return(status: 401, body: "Unauthorized")
+      end
+
+      it "returns error for all symbols" do
+        result = described_class.get_quotes(symbols)
+        expect(result["AAPL"]).to eq(error: "Authentication failed after 2 retries")
+        expect(result["MSFT"]).to eq(error: "Authentication failed after 2 retries")
+      end
+    end
+  end
 end

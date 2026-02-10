@@ -9,6 +9,7 @@ module YahooFinanceClient
     QUOTE_PATH = "/v7/finance/quote"
     CACHE_TTL = 300
     MAX_RETRIES = 2
+    BATCH_SIZE = 50
     AUTH_ERROR_PATTERNS = [/invalid cookie/i, /invalid crumb/i, /unauthorized/i].freeze
 
     @cache = {}
@@ -19,7 +20,34 @@ module YahooFinanceClient
         fetch_from_cache(cache_key) || fetch_and_cache(cache_key, symbol)
       end
 
+      def get_quotes(symbols)
+        return {} if symbols.nil? || symbols.empty?
+
+        results, uncached = partition_cached(symbols)
+        fetch_uncached_quotes(uncached, results)
+        results
+      end
+
       private
+
+      def partition_cached(symbols)
+        results = {}
+        uncached = []
+        symbols.each do |symbol|
+          cached = fetch_from_cache("quote_#{symbol}")
+          cached ? results[symbol] = cached : uncached << symbol
+        end
+        [results, uncached]
+      end
+
+      def fetch_uncached_quotes(uncached, results)
+        uncached.each_slice(BATCH_SIZE) do |batch|
+          fetch_quotes_data(batch).each do |sym, data|
+            store_in_cache("quote_#{sym}", data)
+            results[sym] = data
+          end
+        end
+      end
 
       def fetch_and_cache(cache_key, symbol)
         data = fetch_quote_data(symbol)
@@ -39,6 +67,19 @@ module YahooFinanceClient
         end
       end
 
+      def fetch_quotes_data(symbols)
+        retries = 0
+        symbols_param = symbols.join(",")
+        begin
+          response = make_authenticated_request(symbols_param)
+          handle_batch_response(response, symbols)
+        rescue AuthenticationError
+          retries += 1
+          retry if retries <= MAX_RETRIES
+          symbols.each_with_object({}) { |s, h| h[s] = { error: "Authentication failed after #{MAX_RETRIES} retries" } }
+        end
+      end
+
       def make_authenticated_request(symbol)
         session = Session.instance
         session.ensure_authenticated
@@ -54,6 +95,20 @@ module YahooFinanceClient
         response.success? ? parse_response(response.body, symbol) : { error: "Yahoo Finance connection failed" }
       end
 
+      def handle_batch_response(response, symbols)
+        if auth_error?(response)
+          Session.instance.invalidate!
+          raise AuthenticationError, "Authentication failed"
+        end
+        unless response.success?
+          return symbols.each_with_object({}) do |s, h|
+            h[s] = { error: "Yahoo Finance connection failed" }
+          end
+        end
+
+        parse_batch_response(response.body, symbols)
+      end
+
       def auth_error?(response)
         response.code == 401 || AUTH_ERROR_PATTERNS.any? { |p| response.body.to_s.match?(p) }
       end
@@ -61,6 +116,18 @@ module YahooFinanceClient
       def parse_response(body, symbol)
         quote = JSON.parse(body).dig("quoteResponse", "result", 0)
         quote ? format_quote(quote) : { error: "No data was found for #{symbol}" }
+      end
+
+      def parse_batch_response(body, symbols)
+        results = JSON.parse(body).dig("quoteResponse", "result") || []
+        found = results.each_with_object({}) do |quote, hash|
+          formatted = format_quote(quote)
+          hash[formatted[:symbol]] = formatted
+        end
+
+        symbols.each_with_object(found) do |symbol, hash|
+          hash[symbol] ||= { error: "No data was found for #{symbol}" }
+        end
       end
 
       def format_quote(quote)

@@ -32,10 +32,45 @@ gem install yahoo_finance_client
 
 ## Usage
 
-You should be able to get stock data by calling this method and passing a string with the stock ticker:
+### Single Quote
+
+Fetch stock data by passing a ticker symbol:
 ```ruby
 YahooFinanceClient::Stock.get_quote("AAPL")
+# => {
+#   symbol: "AAPL", name: "Apple Inc.", price: 182.52,
+#   change: 1.25, percent_change: 0.69, volume: 48123456,
+#   pe_ratio: 28.5, eps: 6.40,
+#   dividend: 0.96, dividend_yield: 0.53, payout_ratio: 15.0,
+#   ma50: 178.30, ma200: 172.15,
+#   ex_dividend_date: #<Date: 2025-02-07>, dividend_date: #<Date: 2025-02-15>
+# }
 ```
+
+### Bulk Quotes
+
+Fetch multiple quotes at once (batched in groups of 50):
+```ruby
+YahooFinanceClient::Stock.get_quotes(["AAPL", "MSFT", "GOOG"])
+# => { "AAPL" => { symbol: "AAPL", ... }, "MSFT" => { ... }, "GOOG" => { ... } }
+```
+
+### Dividend History
+
+Fetch historical dividend payments via the chart API:
+```ruby
+YahooFinanceClient::Stock.get_dividend_history("AAPL")
+# => [{ date: #<Date: 2024-02-09>, amount: 0.24 }, ...]
+```
+
+The default range is `"2y"`. You can pass a different range:
+```ruby
+YahooFinanceClient::Stock.get_dividend_history("AAPL", range: "5y")
+```
+
+### Caching
+
+All responses are cached for 5 minutes (300 seconds). The cache is shared across `get_quote`, `get_quotes`, and `get_dividend_history`.
 
 ## Development
 

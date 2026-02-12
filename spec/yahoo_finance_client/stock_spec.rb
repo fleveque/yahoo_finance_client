@@ -742,4 +742,149 @@ RSpec.describe YahooFinanceClient::Stock do
       end
     end
   end
+
+  describe ".get_dividend_history" do
+    let(:symbol) { "AAPL" }
+    let(:base_url) { "https://query1.finance.yahoo.com" }
+    let(:chart_url) { "#{base_url}/v8/finance/chart/#{symbol}?range=2y&interval=1mo&events=div&crumb=#{crumb}" }
+    let(:cookie_url) { "https://fc.yahoo.com" }
+    let(:crumb_url) { "https://query1.finance.yahoo.com/v1/test/getcrumb" }
+    let(:cookie) { "test_cookie" }
+    let(:crumb) { "test_crumb" }
+    let(:session) { YahooFinanceClient::Session.instance }
+
+    before do
+      described_class.instance_variable_set(:@cache, {})
+      session.send(:reset!)
+      stub_request(:get, cookie_url)
+        .to_return(status: 200, headers: { "set-cookie" => cookie })
+      stub_request(:get, crumb_url)
+        .with(headers: { "Cookie" => cookie })
+        .to_return(status: 200, body: crumb)
+    end
+
+    context "when dividends exist" do
+      let(:response_body) do
+        {
+          "chart" => {
+            "result" => [
+              {
+                "events" => {
+                  "dividends" => {
+                    "1707955200" => { "date" => 1_707_955_200, "amount" => 0.24 },
+                    "1715644800" => { "date" => 1_715_644_800, "amount" => 0.25 },
+                    "1723420800" => { "date" => 1_723_420_800, "amount" => 0.25 },
+                    "1731196800" => { "date" => 1_731_196_800, "amount" => 0.25 }
+                  }
+                }
+              }
+            ]
+          }
+        }.to_json
+      end
+
+      before do
+        stub_request(:get, chart_url)
+          .to_return(status: 200, body: response_body)
+      end
+
+      it "returns sorted array of dividend events" do
+        result = described_class.get_dividend_history(symbol)
+        expect(result).to be_an(Array)
+        expect(result.size).to eq(4)
+        expect(result.first[:date]).to be_a(Date)
+        expect(result.first[:amount]).to eq(0.24)
+        expect(result.last[:amount]).to eq(0.25)
+      end
+
+      it "returns dates sorted chronologically" do
+        result = described_class.get_dividend_history(symbol)
+        dates = result.map { |d| d[:date] }
+        expect(dates).to eq(dates.sort)
+      end
+
+      it "caches the result" do
+        described_class.get_dividend_history(symbol)
+        cache = described_class.instance_variable_get(:@cache)
+        expect(cache["div_history_#{symbol}_2y"]).not_to be_nil
+      end
+    end
+
+    context "when no dividends exist" do
+      let(:response_body) do
+        {
+          "chart" => {
+            "result" => [
+              {
+                "events" => {}
+              }
+            ]
+          }
+        }.to_json
+      end
+
+      before do
+        stub_request(:get, chart_url)
+          .to_return(status: 200, body: response_body)
+      end
+
+      it "returns empty array" do
+        result = described_class.get_dividend_history(symbol)
+        expect(result).to eq([])
+      end
+    end
+
+    context "when API returns error" do
+      before do
+        stub_request(:get, chart_url)
+          .to_return(status: 500, body: "")
+      end
+
+      it "returns empty array" do
+        result = described_class.get_dividend_history(symbol)
+        expect(result).to eq([])
+      end
+    end
+
+    context "when authentication fails after max retries" do
+      before do
+        stub_request(:get, chart_url)
+          .to_return(status: 401, body: "Unauthorized")
+      end
+
+      it "returns empty array" do
+        result = described_class.get_dividend_history(symbol)
+        expect(result).to eq([])
+      end
+    end
+
+    context "with custom range parameter" do
+      let(:chart_url_1y) { "#{base_url}/v8/finance/chart/#{symbol}?range=1y&interval=1mo&events=div&crumb=#{crumb}" }
+      let(:response_body) do
+        {
+          "chart" => {
+            "result" => [
+              {
+                "events" => {
+                  "dividends" => {
+                    "1715644800" => { "date" => 1_715_644_800, "amount" => 0.25 }
+                  }
+                }
+              }
+            ]
+          }
+        }.to_json
+      end
+
+      before do
+        stub_request(:get, chart_url_1y)
+          .to_return(status: 200, body: response_body)
+      end
+
+      it "uses the specified range" do
+        result = described_class.get_dividend_history(symbol, range: "1y")
+        expect(result.size).to eq(1)
+      end
+    end
+  end
 end

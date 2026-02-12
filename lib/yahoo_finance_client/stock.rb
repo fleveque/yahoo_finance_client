@@ -7,6 +7,7 @@ module YahooFinanceClient
   # This class provides methods to interact with Yahoo Finance API for stock data.
   class Stock
     QUOTE_PATH = "/v7/finance/quote"
+    CHART_PATH = "/v8/finance/chart"
     CACHE_TTL = 300
     MAX_RETRIES = 2
     BATCH_SIZE = 50
@@ -26,6 +27,11 @@ module YahooFinanceClient
         results, uncached = partition_cached(symbols)
         fetch_uncached_quotes(uncached, results)
         results
+      end
+
+      def get_dividend_history(symbol, range: "2y")
+        cache_key = "div_history_#{symbol}_#{range}"
+        fetch_from_cache(cache_key) || fetch_and_cache_dividend_history(cache_key, symbol, range)
       end
 
       private
@@ -167,6 +173,61 @@ module YahooFinanceClient
         return nil unless value.is_a?(Numeric) && value.positive?
 
         Time.at(value).utc.to_date
+      end
+
+      def fetch_and_cache_dividend_history(cache_key, symbol, range)
+        data = fetch_dividend_history_data(symbol, range)
+        store_in_cache(cache_key, data) unless data.empty?
+        data
+      end
+
+      def fetch_dividend_history_data(symbol, range)
+        retries = 0
+        begin
+          response = make_chart_request(symbol, range)
+          parse_dividend_history(response)
+        rescue AuthenticationError
+          retries += 1
+          retry if retries <= MAX_RETRIES
+          []
+        end
+      end
+
+      def make_chart_request(symbol, range)
+        session = Session.instance
+        session.ensure_authenticated
+        url = "#{session.base_url}#{CHART_PATH}/#{symbol}?range=#{range}&interval=1mo&events=div&crumb=#{session.crumb}"
+        HTTParty.get(url, headers: { "User-Agent" => Session::USER_AGENT, "Cookie" => session.cookie })
+      end
+
+      def parse_dividend_history(response)
+        raise_if_auth_error(response)
+        return [] unless response.success?
+
+        dividends = JSON.parse(response.body).dig("chart", "result", 0, "events", "dividends")
+        return [] unless dividends
+
+        build_dividend_entries(dividends)
+      end
+
+      def raise_if_auth_error(response)
+        return unless auth_error?(response)
+
+        Session.instance.invalidate!
+        raise AuthenticationError, "Authentication failed"
+      end
+
+      def build_dividend_entries(dividends)
+        entries = dividends.values.filter_map { |entry| parse_dividend_entry(entry) }
+        entries.sort_by { |d| d[:date] }
+      end
+
+      def parse_dividend_entry(entry)
+        date = parse_unix_date(entry["date"])
+        amount = entry["amount"]
+        return unless date && amount&.positive?
+
+        { date: date, amount: amount.round(4) }
       end
 
       def fetch_from_cache(key)

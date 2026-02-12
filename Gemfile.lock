@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    yahoo_finance_client (0.3.1)
+    yahoo_finance_client (0.4.0)
       csv
       httparty (~> 0.21.0)
 

@@ -41,7 +41,8 @@ RSpec.describe YahooFinanceClient::Stock do
                 "epsTrailingTwelveMonths" => 5.88,
                 "dividendRate" => 0.96,
                 "fiftyDayAverage" => 148.5,
-                "twoHundredDayAverage" => 145.0
+                "twoHundredDayAverage" => 145.0,
+                "exDividendDate" => 1_710_374_400
               }
             ]
           }
@@ -62,7 +63,9 @@ RSpec.describe YahooFinanceClient::Stock do
           dividend_yield: 0.64,
           payout_ratio: 16.33,
           ma50: 148.5,
-          ma200: 145.0
+          ma200: 145.0,
+          ex_dividend_date: Date.new(2024, 3, 14),
+          dividend_date: nil
         }
       end
 
@@ -74,6 +77,12 @@ RSpec.describe YahooFinanceClient::Stock do
       it "returns the quote data" do
         result = described_class.get_quote(symbol)
         expect(result).to eq(expected_quote)
+      end
+
+      it "returns ex_dividend_date as a Date" do
+        result = described_class.get_quote(symbol)
+        expect(result[:ex_dividend_date]).to be_a(Date)
+        expect(result[:ex_dividend_date]).to eq(Date.new(2024, 3, 14))
       end
 
       it "caches the quote data" do
@@ -130,7 +139,9 @@ RSpec.describe YahooFinanceClient::Stock do
           dividend_yield: 0.64,
           payout_ratio: 16.33,
           ma50: 148.5,
-          ma200: 145.0
+          ma200: 145.0,
+          ex_dividend_date: Date.new(2024, 3, 14),
+          dividend_date: nil
         }
       end
 
@@ -164,7 +175,9 @@ RSpec.describe YahooFinanceClient::Stock do
           dividend_yield: 0.64,
           payout_ratio: 16.33,
           ma50: 148.5,
-          ma200: 145.0
+          ma200: 145.0,
+          ex_dividend_date: Date.new(2024, 3, 14),
+          dividend_date: nil
         }
       end
 
@@ -183,7 +196,8 @@ RSpec.describe YahooFinanceClient::Stock do
                 "epsTrailingTwelveMonths" => 5.96,
                 "dividendRate" => 0.96,
                 "fiftyDayAverage" => 150.0,
-                "twoHundredDayAverage" => 147.0
+                "twoHundredDayAverage" => 147.0,
+                "exDividendDate" => 1_710_374_400
               }
             ]
           }
@@ -204,7 +218,9 @@ RSpec.describe YahooFinanceClient::Stock do
           dividend_yield: 0.62,
           payout_ratio: 16.11,
           ma50: 150.0,
-          ma200: 147.0
+          ma200: 147.0,
+          ex_dividend_date: Date.new(2024, 3, 14),
+          dividend_date: nil
         }
       end
 
@@ -269,8 +285,47 @@ RSpec.describe YahooFinanceClient::Stock do
           dividend_yield: nil,
           payout_ratio: nil,
           ma50: 138.0,
-          ma200: 135.0
+          ma200: 135.0,
+          ex_dividend_date: nil,
+          dividend_date: nil
         )
+      end
+
+      it "returns nil for ex_dividend_date when exDividendDate is missing" do
+        result = described_class.get_quote("GOOG")
+        expect(result[:ex_dividend_date]).to be_nil
+      end
+    end
+
+    context "when exDividendDate is zero" do
+      let(:response_body) do
+        {
+          "quoteResponse" => {
+            "result" => [
+              {
+                "symbol" => "TEST",
+                "shortName" => "Test Inc.",
+                "regularMarketPrice" => 100.0,
+                "regularMarketChange" => 0,
+                "regularMarketChangePercent" => 0,
+                "regularMarketVolume" => 10_000,
+                "trailingPE" => nil,
+                "epsTrailingTwelveMonths" => nil,
+                "exDividendDate" => 0
+              }
+            ]
+          }
+        }.to_json
+      end
+
+      before do
+        stub_request(:get, "#{base_url}/v7/finance/quote?symbols=TEST&crumb=#{crumb}")
+          .to_return(status: 200, body: response_body)
+      end
+
+      it "returns nil for ex_dividend_date" do
+        result = described_class.get_quote("TEST")
+        expect(result[:ex_dividend_date]).to be_nil
       end
     end
 
@@ -317,7 +372,9 @@ RSpec.describe YahooFinanceClient::Stock do
           dividend_yield: 0.0,
           payout_ratio: nil,
           ma50: 195.0,
-          ma200: 180.0
+          ma200: 180.0,
+          ex_dividend_date: nil,
+          dividend_date: nil
         )
       end
     end
@@ -338,7 +395,8 @@ RSpec.describe YahooFinanceClient::Stock do
                 "epsTrailingTwelveMonths" => 5.88,
                 "dividendRate" => 0.96,
                 "fiftyDayAverage" => 148.5,
-                "twoHundredDayAverage" => 145.0
+                "twoHundredDayAverage" => 145.0,
+                "exDividendDate" => 1_710_374_400
               }
             ]
           }
@@ -369,7 +427,9 @@ RSpec.describe YahooFinanceClient::Stock do
           dividend_yield: 0.64,
           payout_ratio: 16.33,
           ma50: 148.5,
-          ma200: 145.0
+          ma200: 145.0,
+          ex_dividend_date: Date.new(2024, 3, 14),
+          dividend_date: nil
         )
       end
     end
@@ -402,7 +462,8 @@ RSpec.describe YahooFinanceClient::Stock do
                 "epsTrailingTwelveMonths" => 5.88,
                 "dividendRate" => 0.96,
                 "fiftyDayAverage" => 148.5,
-                "twoHundredDayAverage" => 145.0
+                "twoHundredDayAverage" => 145.0,
+                "exDividendDate" => 1_710_374_400
               }
             ]
           }
@@ -434,7 +495,9 @@ RSpec.describe YahooFinanceClient::Stock do
           dividend_yield: 0.64,
           payout_ratio: 16.33,
           ma50: 148.5,
-          ma200: 145.0
+          ma200: 145.0,
+          ex_dividend_date: Date.new(2024, 3, 14),
+          dividend_date: nil
         )
       end
     end
@@ -471,7 +534,7 @@ RSpec.describe YahooFinanceClient::Stock do
                 "regularMarketChangePercent" => 1.0, "regularMarketVolume" => 100_000,
                 "trailingPE" => 25.5, "epsTrailingTwelveMonths" => 5.88,
                 "dividendRate" => 0.96, "fiftyDayAverage" => 148.5,
-                "twoHundredDayAverage" => 145.0
+                "twoHundredDayAverage" => 145.0, "exDividendDate" => 1_710_374_400
               },
               {
                 "symbol" => "MSFT", "shortName" => "Microsoft Corp.",
@@ -479,7 +542,7 @@ RSpec.describe YahooFinanceClient::Stock do
                 "regularMarketChangePercent" => 0.53, "regularMarketVolume" => 90_000,
                 "trailingPE" => 35.0, "epsTrailingTwelveMonths" => 10.86,
                 "dividendRate" => 3.0, "fiftyDayAverage" => 375.0,
-                "twoHundredDayAverage" => 360.0
+                "twoHundredDayAverage" => 360.0, "exDividendDate" => 1_715_644_800
               }
             ]
           }
@@ -519,7 +582,7 @@ RSpec.describe YahooFinanceClient::Stock do
                 "regularMarketChangePercent" => 1.0, "regularMarketVolume" => 100_000,
                 "trailingPE" => 25.5, "epsTrailingTwelveMonths" => 5.88,
                 "dividendRate" => 0.96, "fiftyDayAverage" => 148.5,
-                "twoHundredDayAverage" => 145.0
+                "twoHundredDayAverage" => 145.0, "exDividendDate" => 1_710_374_400
               }
             ]
           }
@@ -545,7 +608,7 @@ RSpec.describe YahooFinanceClient::Stock do
         { symbol: "AAPL", name: "Apple Inc.", price: 150.0, change: 1.5,
           percent_change: 1.0, volume: 100_000, pe_ratio: 25.5, eps: 5.88,
           dividend: 0.96, dividend_yield: 0.64, payout_ratio: 16.33,
-          ma50: 148.5, ma200: 145.0 }
+          ma50: 148.5, ma200: 145.0, ex_dividend_date: Date.new(2024, 3, 14), dividend_date: nil }
       end
       let(:response_body) do
         {
@@ -557,7 +620,7 @@ RSpec.describe YahooFinanceClient::Stock do
                 "regularMarketChangePercent" => 0.53, "regularMarketVolume" => 90_000,
                 "trailingPE" => 35.0, "epsTrailingTwelveMonths" => 10.86,
                 "dividendRate" => 3.0, "fiftyDayAverage" => 375.0,
-                "twoHundredDayAverage" => 360.0
+                "twoHundredDayAverage" => 360.0, "exDividendDate" => 1_715_644_800
               }
             ]
           }
@@ -642,7 +705,7 @@ RSpec.describe YahooFinanceClient::Stock do
                 "regularMarketChangePercent" => 1.0, "regularMarketVolume" => 100_000,
                 "trailingPE" => 25.5, "epsTrailingTwelveMonths" => 5.88,
                 "dividendRate" => 0.96, "fiftyDayAverage" => 148.5,
-                "twoHundredDayAverage" => 145.0
+                "twoHundredDayAverage" => 145.0, "exDividendDate" => 1_710_374_400
               }
             ]
           }

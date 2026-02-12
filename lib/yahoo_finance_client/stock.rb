@@ -145,7 +145,9 @@ module YahooFinanceClient
           volume: quote["regularMarketVolume"], pe_ratio: quote["trailingPE"], eps: eps,
           dividend: dividend, dividend_yield: calculate_yield(dividend, price),
           payout_ratio: calculate_payout(dividend, eps),
-          ma50: quote["fiftyDayAverage"], ma200: quote["twoHundredDayAverage"]
+          ma50: quote["fiftyDayAverage"], ma200: quote["twoHundredDayAverage"],
+          ex_dividend_date: parse_unix_date(quote["exDividendDate"]),
+          dividend_date: parse_unix_date(quote["dividendDate"])
         }
       end
 
@@ -159,6 +161,12 @@ module YahooFinanceClient
         return nil unless dividend && eps&.positive?
 
         (dividend / eps * 100).round(2)
+      end
+
+      def parse_unix_date(value)
+        return nil unless value.is_a?(Numeric) && value.positive?
+
+        Time.at(value).utc.to_date
       end
 
       def fetch_from_cache(key)

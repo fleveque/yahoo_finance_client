@@ -42,6 +42,8 @@ RSpec.describe YahooFinanceClient::Stock do
                 "dividendRate" => 0.96,
                 "fiftyDayAverage" => 148.5,
                 "twoHundredDayAverage" => 145.0,
+                "fiftyTwoWeekHigh" => 180.0,
+                "fiftyTwoWeekLow" => 120.0,
                 "exDividendDate" => 1_710_374_400
               }
             ]
@@ -64,6 +66,8 @@ RSpec.describe YahooFinanceClient::Stock do
           payout_ratio: 16.33,
           ma50: 148.5,
           ma200: 145.0,
+          fifty_two_week_high: 180.0,
+          fifty_two_week_low: 120.0,
           ex_dividend_date: Date.new(2024, 3, 14),
           dividend_date: nil
         }
@@ -140,6 +144,8 @@ RSpec.describe YahooFinanceClient::Stock do
           payout_ratio: 16.33,
           ma50: 148.5,
           ma200: 145.0,
+          fifty_two_week_high: 180.0,
+          fifty_two_week_low: 120.0,
           ex_dividend_date: Date.new(2024, 3, 14),
           dividend_date: nil
         }
@@ -176,6 +182,8 @@ RSpec.describe YahooFinanceClient::Stock do
           payout_ratio: 16.33,
           ma50: 148.5,
           ma200: 145.0,
+          fifty_two_week_high: 180.0,
+          fifty_two_week_low: 120.0,
           ex_dividend_date: Date.new(2024, 3, 14),
           dividend_date: nil
         }
@@ -197,6 +205,8 @@ RSpec.describe YahooFinanceClient::Stock do
                 "dividendRate" => 0.96,
                 "fiftyDayAverage" => 150.0,
                 "twoHundredDayAverage" => 147.0,
+                "fiftyTwoWeekHigh" => 185.0,
+                "fiftyTwoWeekLow" => 125.0,
                 "exDividendDate" => 1_710_374_400
               }
             ]
@@ -219,6 +229,8 @@ RSpec.describe YahooFinanceClient::Stock do
           payout_ratio: 16.11,
           ma50: 150.0,
           ma200: 147.0,
+          fifty_two_week_high: 185.0,
+          fifty_two_week_low: 125.0,
           ex_dividend_date: Date.new(2024, 3, 14),
           dividend_date: nil
         }
@@ -258,7 +270,9 @@ RSpec.describe YahooFinanceClient::Stock do
                 "trailingPE" => 22.0,
                 "epsTrailingTwelveMonths" => 6.36,
                 "fiftyDayAverage" => 138.0,
-                "twoHundredDayAverage" => 135.0
+                "twoHundredDayAverage" => 135.0,
+                "fiftyTwoWeekHigh" => 160.0,
+                "fiftyTwoWeekLow" => 110.0
               }
             ]
           }
@@ -286,6 +300,8 @@ RSpec.describe YahooFinanceClient::Stock do
           payout_ratio: nil,
           ma50: 138.0,
           ma200: 135.0,
+          fifty_two_week_high: 160.0,
+          fifty_two_week_low: 110.0,
           ex_dividend_date: nil,
           dividend_date: nil
         )
@@ -345,7 +361,9 @@ RSpec.describe YahooFinanceClient::Stock do
                 "epsTrailingTwelveMonths" => -1.5,
                 "dividendRate" => 0.0,
                 "fiftyDayAverage" => 195.0,
-                "twoHundredDayAverage" => 180.0
+                "twoHundredDayAverage" => 180.0,
+                "fiftyTwoWeekHigh" => 250.0,
+                "fiftyTwoWeekLow" => 150.0
               }
             ]
           }
@@ -373,6 +391,8 @@ RSpec.describe YahooFinanceClient::Stock do
           payout_ratio: nil,
           ma50: 195.0,
           ma200: 180.0,
+          fifty_two_week_high: 250.0,
+          fifty_two_week_low: 150.0,
           ex_dividend_date: nil,
           dividend_date: nil
         )
@@ -396,6 +416,8 @@ RSpec.describe YahooFinanceClient::Stock do
                 "dividendRate" => 0.96,
                 "fiftyDayAverage" => 148.5,
                 "twoHundredDayAverage" => 145.0,
+                "fiftyTwoWeekHigh" => 180.0,
+                "fiftyTwoWeekLow" => 120.0,
                 "exDividendDate" => 1_710_374_400
               }
             ]
@@ -428,6 +450,8 @@ RSpec.describe YahooFinanceClient::Stock do
           payout_ratio: 16.33,
           ma50: 148.5,
           ma200: 145.0,
+          fifty_two_week_high: 180.0,
+          fifty_two_week_low: 120.0,
           ex_dividend_date: Date.new(2024, 3, 14),
           dividend_date: nil
         )
@@ -463,6 +487,8 @@ RSpec.describe YahooFinanceClient::Stock do
                 "dividendRate" => 0.96,
                 "fiftyDayAverage" => 148.5,
                 "twoHundredDayAverage" => 145.0,
+                "fiftyTwoWeekHigh" => 180.0,
+                "fiftyTwoWeekLow" => 120.0,
                 "exDividendDate" => 1_710_374_400
               }
             ]
@@ -496,6 +522,8 @@ RSpec.describe YahooFinanceClient::Stock do
           payout_ratio: 16.33,
           ma50: 148.5,
           ma200: 145.0,
+          fifty_two_week_high: 180.0,
+          fifty_two_week_low: 120.0,
           ex_dividend_date: Date.new(2024, 3, 14),
           dividend_date: nil
         )
@@ -534,7 +562,8 @@ RSpec.describe YahooFinanceClient::Stock do
                 "regularMarketChangePercent" => 1.0, "regularMarketVolume" => 100_000,
                 "trailingPE" => 25.5, "epsTrailingTwelveMonths" => 5.88,
                 "dividendRate" => 0.96, "fiftyDayAverage" => 148.5,
-                "twoHundredDayAverage" => 145.0, "exDividendDate" => 1_710_374_400
+                "twoHundredDayAverage" => 145.0, "fiftyTwoWeekHigh" => 180.0,
+                "fiftyTwoWeekLow" => 120.0, "exDividendDate" => 1_710_374_400
               },
               {
                 "symbol" => "MSFT", "shortName" => "Microsoft Corp.",
@@ -542,7 +571,8 @@ RSpec.describe YahooFinanceClient::Stock do
                 "regularMarketChangePercent" => 0.53, "regularMarketVolume" => 90_000,
                 "trailingPE" => 35.0, "epsTrailingTwelveMonths" => 10.86,
                 "dividendRate" => 3.0, "fiftyDayAverage" => 375.0,
-                "twoHundredDayAverage" => 360.0, "exDividendDate" => 1_715_644_800
+                "twoHundredDayAverage" => 360.0, "fiftyTwoWeekHigh" => 420.0,
+                "fiftyTwoWeekLow" => 310.0, "exDividendDate" => 1_715_644_800
               }
             ]
           }
@@ -582,7 +612,8 @@ RSpec.describe YahooFinanceClient::Stock do
                 "regularMarketChangePercent" => 1.0, "regularMarketVolume" => 100_000,
                 "trailingPE" => 25.5, "epsTrailingTwelveMonths" => 5.88,
                 "dividendRate" => 0.96, "fiftyDayAverage" => 148.5,
-                "twoHundredDayAverage" => 145.0, "exDividendDate" => 1_710_374_400
+                "twoHundredDayAverage" => 145.0, "fiftyTwoWeekHigh" => 180.0,
+                "fiftyTwoWeekLow" => 120.0, "exDividendDate" => 1_710_374_400
               }
             ]
           }
@@ -608,7 +639,8 @@ RSpec.describe YahooFinanceClient::Stock do
         { symbol: "AAPL", name: "Apple Inc.", price: 150.0, change: 1.5,
           percent_change: 1.0, volume: 100_000, pe_ratio: 25.5, eps: 5.88,
           dividend: 0.96, dividend_yield: 0.64, payout_ratio: 16.33,
-          ma50: 148.5, ma200: 145.0, ex_dividend_date: Date.new(2024, 3, 14), dividend_date: nil }
+          ma50: 148.5, ma200: 145.0, fifty_two_week_high: 180.0, fifty_two_week_low: 120.0,
+          ex_dividend_date: Date.new(2024, 3, 14), dividend_date: nil }
       end
       let(:response_body) do
         {
@@ -620,7 +652,8 @@ RSpec.describe YahooFinanceClient::Stock do
                 "regularMarketChangePercent" => 0.53, "regularMarketVolume" => 90_000,
                 "trailingPE" => 35.0, "epsTrailingTwelveMonths" => 10.86,
                 "dividendRate" => 3.0, "fiftyDayAverage" => 375.0,
-                "twoHundredDayAverage" => 360.0, "exDividendDate" => 1_715_644_800
+                "twoHundredDayAverage" => 360.0, "fiftyTwoWeekHigh" => 420.0,
+                "fiftyTwoWeekLow" => 310.0, "exDividendDate" => 1_715_644_800
               }
             ]
           }
@@ -705,7 +738,8 @@ RSpec.describe YahooFinanceClient::Stock do
                 "regularMarketChangePercent" => 1.0, "regularMarketVolume" => 100_000,
                 "trailingPE" => 25.5, "epsTrailingTwelveMonths" => 5.88,
                 "dividendRate" => 0.96, "fiftyDayAverage" => 148.5,
-                "twoHundredDayAverage" => 145.0, "exDividendDate" => 1_710_374_400
+                "twoHundredDayAverage" => 145.0, "fiftyTwoWeekHigh" => 180.0,
+                "fiftyTwoWeekLow" => 120.0, "exDividendDate" => 1_710_374_400
               }
             ]
           }

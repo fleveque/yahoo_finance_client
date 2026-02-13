@@ -152,6 +152,7 @@ module YahooFinanceClient
           dividend: dividend, dividend_yield: calculate_yield(dividend, price),
           payout_ratio: calculate_payout(dividend, eps),
           ma50: quote["fiftyDayAverage"], ma200: quote["twoHundredDayAverage"],
+          fifty_two_week_high: quote["fiftyTwoWeekHigh"], fifty_two_week_low: quote["fiftyTwoWeekLow"],
           ex_dividend_date: parse_unix_date(quote["exDividendDate"]),
           dividend_date: parse_unix_date(quote["dividendDate"])
         }

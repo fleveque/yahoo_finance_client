@@ -2,12 +2,15 @@
 
 require "httparty"
 require "json"
+require "uri"
 
 module YahooFinanceClient
   # This class provides methods to interact with Yahoo Finance API for stock data.
   class Stock
     QUOTE_PATH = "/v7/finance/quote"
     CHART_PATH = "/v8/finance/chart"
+    SEARCH_PATH = "/v1/finance/search"
+    SEARCH_BASE_URL = "https://query1.finance.yahoo.com"
     CACHE_TTL = 300
     MAX_RETRIES = 2
     BATCH_SIZE = 50
@@ -32,6 +35,19 @@ module YahooFinanceClient
       def get_dividend_history(symbol, range: "2y")
         cache_key = "div_history_#{symbol}_#{range}"
         fetch_from_cache(cache_key) || fetch_and_cache_dividend_history(cache_key, symbol, range)
+      end
+
+      # Search the Yahoo Finance autocomplete index for matching symbols.
+      #
+      # @param query [String] free-text query (ticker or company name)
+      # @param count [Integer] max number of results to return
+      # @return [Array<Hash>] each entry has symbol, name, exchange, type, type_display
+      def search(query, count: 10)
+        normalized = query.to_s.strip
+        return [] if normalized.empty?
+
+        cache_key = "search_#{normalized.downcase}_#{count}"
+        fetch_from_cache(cache_key) || fetch_and_cache_search(cache_key, normalized, count)
       end
 
       private
@@ -229,6 +245,85 @@ module YahooFinanceClient
         return unless date && amount&.positive?
 
         { date: date, amount: amount.round(4) }
+      end
+
+      def fetch_and_cache_search(cache_key, query, count)
+        data = fetch_search_data(query, count)
+        store_in_cache(cache_key, data) unless data.empty?
+        data
+      end
+
+      # Try an unauthenticated request first — the v1/finance/search endpoint is historically
+      # public and does not validate the crumb. Only fall through to the cookie+crumb flow if
+      # Yahoo actually returns an auth error.
+      def fetch_search_data(query, count)
+        url = build_search_url(query, count)
+        response = HTTParty.get(url, headers: { "User-Agent" => Session::USER_AGENT })
+
+        return fetch_authenticated_search(query, count) if auth_error?(response)
+        return [] unless response.success?
+
+        parse_search_response(response.body)
+      rescue StandardError
+        []
+      end
+
+      def fetch_authenticated_search(query, count)
+        retries = 0
+        begin
+          handle_authenticated_search_response(make_authenticated_search_request(query, count))
+        rescue AuthenticationError
+          retries += 1
+          retry if retries <= MAX_RETRIES
+          []
+        end
+      end
+
+      def handle_authenticated_search_response(response)
+        if auth_error?(response)
+          Session.instance.invalidate!
+          raise AuthenticationError, "Authentication failed"
+        end
+        response.success? ? parse_search_response(response.body) : []
+      end
+
+      def make_authenticated_search_request(query, count)
+        session = Session.instance
+        session.ensure_authenticated
+        url = "#{build_search_url(query, count)}&crumb=#{session.crumb}"
+        HTTParty.get(url, headers: { "User-Agent" => Session::USER_AGENT, "Cookie" => session.cookie })
+      end
+
+      def build_search_url(query, count)
+        "#{SEARCH_BASE_URL}#{SEARCH_PATH}?q=#{URI.encode_www_form_component(query)}" \
+          "&quotesCount=#{count}&newsCount=0"
+      end
+
+      def parse_search_response(body)
+        quotes = JSON.parse(body)["quotes"] || []
+        quotes.filter_map { |q| format_search_quote(q) }
+      rescue JSON::ParserError
+        []
+      end
+
+      def format_search_quote(quote)
+        symbol = quote["symbol"].to_s
+        return nil if symbol.empty?
+
+        {
+          symbol: symbol,
+          name: pick_search_name(symbol, quote["shortname"], quote["longname"]),
+          exchange: quote["exchDisp"] || quote["exchange"],
+          type: quote["quoteType"],
+          type_display: quote["typeDisp"]
+        }
+      end
+
+      # Mutual funds and some foreign listings report the symbol code as their `shortname`
+      # (e.g. Baelo Dividendo Creciente comes back with shortname="0P0001QYEF.F"); prefer the
+      # longname when shortname is missing or just echoes the symbol.
+      def pick_search_name(symbol, shortname, longname)
+        [shortname, longname, symbol].find { |n| !n.to_s.empty? && n != symbol } || symbol
       end
 
       def fetch_from_cache(key)

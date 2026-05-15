@@ -55,6 +55,25 @@ YahooFinanceClient::Stock.get_quotes(["AAPL", "MSFT", "GOOG"])
 # => { "AAPL" => { symbol: "AAPL", ... }, "MSFT" => { ... }, "GOOG" => { ... } }
 ```
 
+### Search
+
+Search the Yahoo Finance autocomplete index by ticker or company name:
+```ruby
+YahooFinanceClient::Stock.search("apple")
+# => [
+#   { symbol: "AAPL", name: "Apple Inc.", exchange: "NasdaqGS", type: "EQUITY", type_display: "Equity" },
+#   { symbol: "AAPL.MX", name: "Apple Inc.", exchange: "Mexico", type: "EQUITY", type_display: "Equity" },
+#   ...
+# ]
+```
+
+The default result count is 10. Pass `count:` to override:
+```ruby
+YahooFinanceClient::Stock.search("apple", count: 5)
+```
+
+Search returns `[]` if the query is empty or the upstream request fails.
+
 ### Dividend History
 
 Fetch historical dividend payments via the chart API:

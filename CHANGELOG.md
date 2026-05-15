@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.5.0] - 2026-05-15
+
+- Add `Stock.search(query, count:)` returning matching tickers from Yahoo's `v1/finance/search` autocomplete endpoint
+
 ## [0.4.1] - 2026-02-13
 
 - Add `fifty_two_week_high` and `fifty_two_week_low` fields to quote data

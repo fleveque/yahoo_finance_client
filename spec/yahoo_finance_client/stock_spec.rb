@@ -777,6 +777,275 @@ RSpec.describe YahooFinanceClient::Stock do
     end
   end
 
+  describe ".search" do
+    let(:base_url) { "https://query1.finance.yahoo.com" }
+    let(:cookie_url) { "https://fc.yahoo.com" }
+    let(:crumb_url) { "https://query1.finance.yahoo.com/v1/test/getcrumb" }
+    let(:cookie) { "test_cookie" }
+    let(:crumb) { "test_crumb" }
+    let(:session) { YahooFinanceClient::Session.instance }
+
+    def search_url(query, count: 10, crumb: nil)
+      url = "#{base_url}/v1/finance/search?q=#{URI.encode_www_form_component(query)}" \
+            "&quotesCount=#{count}&newsCount=0"
+      crumb ? "#{url}&crumb=#{crumb}" : url
+    end
+
+    before do
+      described_class.instance_variable_set(:@cache, {})
+      session.send(:reset!)
+      stub_request(:get, cookie_url)
+        .to_return(status: 200, headers: { "set-cookie" => cookie })
+      stub_request(:get, crumb_url)
+        .with(headers: { "Cookie" => cookie })
+        .to_return(status: 200, body: crumb)
+    end
+
+    context "when the response is successful" do
+      let(:response_body) do
+        {
+          "quotes" => [
+            { "symbol" => "AAPL", "shortname" => "Apple Inc.", "longname" => "Apple Incorporated",
+              "exchange" => "NMS", "exchDisp" => "NasdaqGS", "quoteType" => "EQUITY",
+              "typeDisp" => "Equity" },
+            { "symbol" => "AAPL.MX", "shortname" => "Apple Inc.",
+              "exchange" => "MEX", "exchDisp" => "Mexico", "quoteType" => "EQUITY",
+              "typeDisp" => "Equity" }
+          ]
+        }.to_json
+      end
+
+      before do
+        stub_request(:get, search_url("apple")).to_return(status: 200, body: response_body)
+      end
+
+      it "returns normalized search results" do
+        result = described_class.search("apple")
+        expect(result).to eq(
+          [
+            { symbol: "AAPL", name: "Apple Inc.", exchange: "NasdaqGS",
+              type: "EQUITY", type_display: "Equity" },
+            { symbol: "AAPL.MX", name: "Apple Inc.", exchange: "Mexico",
+              type: "EQUITY", type_display: "Equity" }
+          ]
+        )
+      end
+
+      it "caches the result" do
+        described_class.search("apple")
+        cache = described_class.instance_variable_get(:@cache)
+        expect(cache["search_apple_10"][:data].size).to eq(2)
+      end
+
+      it "issues only one HTTP call across two invocations" do
+        described_class.search("apple")
+        described_class.search("apple")
+        expect(WebMock).to have_requested(:get, search_url("apple")).once
+      end
+
+      it "does not send an Authorization cookie or crumb" do
+        described_class.search("apple")
+        expect(WebMock).to(have_requested(:get, search_url("apple"))
+          .with { |req| !req.headers.key?("Cookie") })
+      end
+    end
+
+    context "when the response is empty" do
+      before do
+        stub_request(:get, search_url("zzz"))
+          .to_return(status: 200, body: { "quotes" => [] }.to_json)
+      end
+
+      it "returns []" do
+        expect(described_class.search("zzz")).to eq([])
+      end
+
+      it "does not store empty results in cache" do
+        described_class.search("zzz")
+        cache = described_class.instance_variable_get(:@cache)
+        expect(cache).to be_empty
+      end
+    end
+
+    context "when the response is a non-200 non-auth error" do
+      before do
+        stub_request(:get, search_url("apple")).to_return(status: 500, body: "")
+      end
+
+      it "returns []" do
+        expect(described_class.search("apple")).to eq([])
+      end
+    end
+
+    context "when the query is blank" do
+      it "returns [] for empty string" do
+        expect(described_class.search("")).to eq([])
+      end
+
+      it "returns [] for whitespace" do
+        expect(described_class.search("   ")).to eq([])
+      end
+
+      it "returns [] for nil" do
+        expect(described_class.search(nil)).to eq([])
+      end
+    end
+
+    context "with a custom count" do
+      before do
+        stub_request(:get, search_url("apple", count: 3))
+          .to_return(status: 200, body: { "quotes" => [{ "symbol" => "AAPL" }] }.to_json)
+      end
+
+      it "passes quotesCount through" do
+        result = described_class.search("apple", count: 3)
+        expect(result.size).to eq(1)
+      end
+
+      it "caches under a count-specific key" do
+        described_class.search("apple", count: 3)
+        cache = described_class.instance_variable_get(:@cache)
+        expect(cache.keys).to include("search_apple_3")
+      end
+    end
+
+    context "with entries missing a symbol" do
+      let(:response_body) do
+        {
+          "quotes" => [
+            { "symbol" => "AAPL", "shortname" => "Apple Inc." },
+            { "symbol" => "", "shortname" => "No symbol" },
+            { "shortname" => "Also missing" }
+          ]
+        }.to_json
+      end
+
+      before do
+        stub_request(:get, search_url("apple")).to_return(status: 200, body: response_body)
+      end
+
+      it "filters out entries without a symbol" do
+        result = described_class.search("apple")
+        expect(result.map { |r| r[:symbol] }).to eq(["AAPL"])
+      end
+    end
+
+    context "with non-EQUITY types" do
+      let(:response_body) do
+        {
+          "quotes" => [
+            { "symbol" => "SPY", "shortname" => "SPDR S&P 500",
+              "quoteType" => "ETF", "typeDisp" => "ETF" },
+            { "symbol" => "BTC-USD", "shortname" => "Bitcoin",
+              "quoteType" => "CRYPTOCURRENCY", "typeDisp" => "Cryptocurrency" }
+          ]
+        }.to_json
+      end
+
+      before do
+        stub_request(:get, search_url("test")).to_return(status: 200, body: response_body)
+      end
+
+      it "preserves non-EQUITY types" do
+        result = described_class.search("test")
+        expect(result.map { |r| r[:type] }).to eq(%w[ETF CRYPTOCURRENCY])
+      end
+    end
+
+    context "when name falls back to longname or symbol" do
+      let(:response_body) do
+        {
+          "quotes" => [
+            { "symbol" => "ONLYLONG", "longname" => "Only Long" },
+            { "symbol" => "BARE" }
+          ]
+        }.to_json
+      end
+
+      before do
+        stub_request(:get, search_url("x")).to_return(status: 200, body: response_body)
+      end
+
+      it "falls back through shortname → longname → symbol" do
+        result = described_class.search("x")
+        expect(result.map { |r| r[:name] }).to eq(["Only Long", "BARE"])
+      end
+    end
+
+    context "when shortname is the symbol (e.g. mutual funds)" do
+      let(:response_body) do
+        {
+          "quotes" => [
+            { "symbol" => "0P0001QYEF.F", "shortname" => "0P0001QYEF.F",
+              "longname" => "Baelo Dividendo Creciente A FI", "quoteType" => "MUTUALFUND" }
+          ]
+        }.to_json
+      end
+
+      before do
+        stub_request(:get, search_url("baelo")).to_return(status: 200, body: response_body)
+      end
+
+      it "prefers longname over the symbol-echoing shortname" do
+        result = described_class.search("baelo")
+        expect(result.first[:name]).to eq("Baelo Dividendo Creciente A FI")
+      end
+    end
+
+    context "when JSON parsing fails" do
+      before do
+        stub_request(:get, search_url("apple")).to_return(status: 200, body: "<html>error</html>")
+      end
+
+      it "returns []" do
+        expect(described_class.search("apple")).to eq([])
+      end
+    end
+
+    context "when the unauthenticated request hits an auth error and authenticated retry succeeds" do
+      let(:response_body) do
+        { "quotes" => [{ "symbol" => "AAPL", "shortname" => "Apple Inc." }] }.to_json
+      end
+
+      before do
+        stub_request(:get, search_url("apple"))
+          .to_return(status: 401, body: "Unauthorized")
+        stub_request(:get, search_url("apple", crumb: crumb))
+          .to_return(status: 200, body: response_body)
+      end
+
+      it "falls back to the authenticated flow and returns results" do
+        result = described_class.search("apple")
+        expect(result.map { |r| r[:symbol] }).to eq(["AAPL"])
+      end
+    end
+
+    context "when both unauthenticated and authenticated retries exhaust" do
+      before do
+        stub_request(:get, search_url("apple"))
+          .to_return(status: 401, body: "Unauthorized")
+        stub_request(:get, search_url("apple", crumb: crumb))
+          .to_return(status: 401, body: "Unauthorized")
+      end
+
+      it "returns []" do
+        expect(described_class.search("apple")).to eq([])
+      end
+    end
+
+    context "when the query needs URL-encoding" do
+      before do
+        stub_request(:get, search_url("hello world"))
+          .to_return(status: 200, body: { "quotes" => [] }.to_json)
+      end
+
+      it "URL-encodes the query" do
+        described_class.search("hello world")
+        expect(WebMock).to have_requested(:get, search_url("hello world"))
+      end
+    end
+  end
+
   describe ".get_dividend_history" do
     let(:symbol) { "AAPL" }
     let(:base_url) { "https://query1.finance.yahoo.com" }

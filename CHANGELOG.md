@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.6.0] - 2026-05-16
+
+- Expose Yahoo's `currency` field in `get_quote` / `get_quotes` results so callers can support multi-currency portfolios
+
 ## [0.5.0] - 2026-05-15
 
 - Add `Stock.search(query, count:)` returning matching tickers from Yahoo's `v1/finance/search` autocomplete endpoint

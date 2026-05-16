@@ -162,7 +162,7 @@ module YahooFinanceClient
 
       def build_quote_hash(quote, price, dividend, eps)
         {
-          symbol: quote["symbol"], name: quote["shortName"], price: price,
+          symbol: quote["symbol"], name: quote["shortName"], price: price, currency: quote["currency"],
           change: quote["regularMarketChange"], percent_change: quote["regularMarketChangePercent"],
           volume: quote["regularMarketVolume"], pe_ratio: quote["trailingPE"], eps: eps,
           dividend: dividend, dividend_yield: calculate_yield(dividend, price),

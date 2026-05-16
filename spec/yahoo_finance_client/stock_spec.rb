@@ -56,6 +56,7 @@ RSpec.describe YahooFinanceClient::Stock do
           symbol: "AAPL",
           name: "Apple Inc.",
           price: 150.0,
+          currency: nil,
           change: 1.5,
           percent_change: 1.0,
           volume: 100_000,
@@ -134,6 +135,7 @@ RSpec.describe YahooFinanceClient::Stock do
           symbol: "AAPL",
           name: "Apple Inc.",
           price: 150.0,
+          currency: nil,
           change: 1.5,
           percent_change: 1.0,
           volume: 100_000,
@@ -172,6 +174,7 @@ RSpec.describe YahooFinanceClient::Stock do
           symbol: "AAPL",
           name: "Apple Inc.",
           price: 150.0,
+          currency: nil,
           change: 1.5,
           percent_change: 1.0,
           volume: 100_000,
@@ -219,6 +222,7 @@ RSpec.describe YahooFinanceClient::Stock do
           symbol: "AAPL",
           name: "Apple Inc.",
           price: 155.0,
+          currency: nil,
           change: 2.0,
           percent_change: 1.3,
           volume: 120_000,
@@ -290,6 +294,7 @@ RSpec.describe YahooFinanceClient::Stock do
           symbol: "GOOG",
           name: "Alphabet Inc.",
           price: 140.0,
+          currency: nil,
           change: -0.5,
           percent_change: -0.36,
           volume: 50_000,
@@ -381,6 +386,7 @@ RSpec.describe YahooFinanceClient::Stock do
           symbol: "TSLA",
           name: "Tesla Inc.",
           price: 200.0,
+          currency: nil,
           change: 5.0,
           percent_change: 2.56,
           volume: 80_000,
@@ -440,6 +446,7 @@ RSpec.describe YahooFinanceClient::Stock do
           symbol: "AAPL",
           name: "Apple Inc.",
           price: 150.0,
+          currency: nil,
           change: 1.5,
           percent_change: 1.0,
           volume: 100_000,
@@ -467,6 +474,33 @@ RSpec.describe YahooFinanceClient::Stock do
       it "returns an authentication error message" do
         result = described_class.get_quote(symbol)
         expect(result).to eq(error: "Authentication failed after 2 retries")
+      end
+    end
+
+    context "when the response includes a currency" do
+      let(:response_body) do
+        {
+          "quoteResponse" => {
+            "result" => [
+              {
+                "symbol" => "IBE.MC", "shortName" => "Iberdrola, S.A.",
+                "regularMarketPrice" => 14.5, "regularMarketChange" => 0.1,
+                "regularMarketChangePercent" => 0.69, "regularMarketVolume" => 1_000_000,
+                "currency" => "EUR"
+              }
+            ]
+          }
+        }.to_json
+      end
+
+      before do
+        stub_request(:get, "#{base_url}/v7/finance/quote?symbols=IBE.MC&crumb=#{crumb}")
+          .to_return(status: 200, body: response_body)
+      end
+
+      it "exposes the currency field" do
+        result = described_class.get_quote("IBE.MC")
+        expect(result[:currency]).to eq("EUR")
       end
     end
 
@@ -512,6 +546,7 @@ RSpec.describe YahooFinanceClient::Stock do
           symbol: "AAPL",
           name: "Apple Inc.",
           price: 150.0,
+          currency: nil,
           change: 1.5,
           percent_change: 1.0,
           volume: 100_000,

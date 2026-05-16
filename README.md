@@ -38,7 +38,7 @@ Fetch stock data by passing a ticker symbol:
 ```ruby
 YahooFinanceClient::Stock.get_quote("AAPL")
 # => {
-#   symbol: "AAPL", name: "Apple Inc.", price: 182.52,
+#   symbol: "AAPL", name: "Apple Inc.", price: 182.52, currency: "USD",
 #   change: 1.25, percent_change: 0.69, volume: 48123456,
 #   pe_ratio: 28.5, eps: 6.40,
 #   dividend: 0.96, dividend_yield: 0.53, payout_ratio: 15.0,

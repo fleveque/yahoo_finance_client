@@ -566,6 +566,89 @@ RSpec.describe YahooFinanceClient::Stock do
     end
   end
 
+  describe ".get_fx_rate" do
+    let(:base_url) { "https://query1.finance.yahoo.com" }
+    let(:cookie_url) { "https://fc.yahoo.com" }
+    let(:crumb_url) { "https://query1.finance.yahoo.com/v1/test/getcrumb" }
+    let(:cookie) { "test_cookie" }
+    let(:crumb) { "test_crumb" }
+    let(:session) { YahooFinanceClient::Session.instance }
+    let(:fx_url) { "#{base_url}/v7/finance/quote?symbols=EURUSD=X&crumb=#{crumb}" }
+
+    before do
+      described_class.instance_variable_set(:@cache, {})
+      session.send(:reset!)
+      stub_request(:get, cookie_url).to_return(status: 200, headers: { "set-cookie" => cookie })
+      stub_request(:get, crumb_url).with(headers: { "Cookie" => cookie }).to_return(status: 200, body: crumb)
+    end
+
+    context "when Yahoo returns a valid quote" do
+      let(:response_body) do
+        { "quoteResponse" => { "result" => [{ "symbol" => "EURUSD=X", "regularMarketPrice" => 1.0823 }] } }.to_json
+      end
+
+      before { stub_request(:get, fx_url).to_return(status: 200, body: response_body) }
+
+      it "returns the rate as a float" do
+        expect(described_class.get_fx_rate("EUR", "USD")).to eq(1.0823)
+      end
+
+      it "caches the rate" do
+        described_class.get_fx_rate("EUR", "USD")
+        described_class.get_fx_rate("EUR", "USD")
+        expect(WebMock).to have_requested(:get, fx_url).once
+      end
+    end
+
+    context "when the pair is an identity" do
+      it "returns 1.0 without hitting Yahoo" do
+        expect(described_class.get_fx_rate("USD", "USD")).to eq(1.0)
+        expect(WebMock).not_to have_requested(:get, /query1\.finance\.yahoo\.com/)
+      end
+    end
+
+    context "when Yahoo returns an empty result" do
+      before do
+        stub_request(:get, fx_url)
+          .to_return(status: 200, body: { "quoteResponse" => { "result" => [] } }.to_json)
+      end
+
+      it "returns nil" do
+        expect(described_class.get_fx_rate("EUR", "USD")).to be_nil
+      end
+
+      it "does not cache the nil result" do
+        described_class.get_fx_rate("EUR", "USD")
+        cache = described_class.instance_variable_get(:@cache)
+        expect(cache).not_to have_key("fx_EUR_USD")
+      end
+    end
+
+    context "when Yahoo returns a non-success response" do
+      before { stub_request(:get, fx_url).to_return(status: 500, body: "boom") }
+
+      it "returns nil" do
+        expect(described_class.get_fx_rate("EUR", "USD")).to be_nil
+      end
+    end
+
+    context "when the response body is not valid JSON" do
+      before { stub_request(:get, fx_url).to_return(status: 200, body: "<html>nope</html>") }
+
+      it "returns nil" do
+        expect(described_class.get_fx_rate("EUR", "USD")).to be_nil
+      end
+    end
+
+    context "when authentication fails after max retries" do
+      before { stub_request(:get, fx_url).to_return(status: 401, body: "unauthorized") }
+
+      it "returns nil" do
+        expect(described_class.get_fx_rate("EUR", "USD")).to be_nil
+      end
+    end
+  end
+
   describe ".get_quotes" do
     let(:base_url) { "https://query1.finance.yahoo.com" }
     let(:cookie_url) { "https://fc.yahoo.com" }

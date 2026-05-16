@@ -74,6 +74,16 @@ YahooFinanceClient::Stock.search("apple", count: 5)
 
 Search returns `[]` if the query is empty or the upstream request fails.
 
+### FX Rates
+
+Fetch a current FX rate between two ISO 4217 currency codes via Yahoo's `<FROM><TO>=X` quote symbol:
+```ruby
+YahooFinanceClient::Stock.get_fx_rate("EUR", "USD")
+# => 1.0823
+```
+
+Identity pairs short-circuit to `1.0` without hitting the API. Returns `nil` on any upstream error.
+
 ### Dividend History
 
 Fetch historical dividend payments via the chart API:

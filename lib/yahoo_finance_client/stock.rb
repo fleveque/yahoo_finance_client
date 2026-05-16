@@ -37,6 +37,19 @@ module YahooFinanceClient
         fetch_from_cache(cache_key) || fetch_and_cache_dividend_history(cache_key, symbol, range)
       end
 
+      # Fetch the current FX rate between two ISO 4217 currency codes via Yahoo's
+      # `<FROM><TO>=X` quote symbol. Returns 1.0 for identity pairs without hitting the API.
+      #
+      # @param from [String] source currency code (e.g. "EUR")
+      # @param to [String] target currency code (e.g. "USD")
+      # @return [Float, nil] one unit of `from` expressed in `to`, or nil on error
+      def get_fx_rate(from, to)
+        return 1.0 if from == to
+
+        cache_key = "fx_#{from}_#{to}"
+        fetch_from_cache(cache_key) || fetch_and_cache_fx_rate(cache_key, from, to)
+      end
+
       # Search the Yahoo Finance autocomplete index for matching symbols.
       #
       # @param query [String] free-text query (ticker or company name)
@@ -190,6 +203,36 @@ module YahooFinanceClient
         return nil unless value.is_a?(Numeric) && value.positive?
 
         Time.at(value).utc.to_date
+      end
+
+      def fetch_and_cache_fx_rate(cache_key, from, to)
+        rate = fetch_fx_rate_data("#{from}#{to}=X")
+        store_in_cache(cache_key, rate) if rate
+        rate
+      end
+
+      def fetch_fx_rate_data(symbol)
+        retries = 0
+        begin
+          parse_fx_response(make_authenticated_request(symbol))
+        rescue AuthenticationError
+          retries += 1
+          retry if retries <= MAX_RETRIES
+          nil
+        end
+      end
+
+      def parse_fx_response(response)
+        if auth_error?(response)
+          Session.instance.invalidate!
+          raise AuthenticationError, "Authentication failed"
+        end
+        return nil unless response.success?
+
+        rate = JSON.parse(response.body).dig("quoteResponse", "result", 0, "regularMarketPrice")
+        rate&.to_f
+      rescue JSON::ParserError
+        nil
       end
 
       def fetch_and_cache_dividend_history(cache_key, symbol, range)

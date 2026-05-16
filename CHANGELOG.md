@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.7.0] - 2026-05-16
+
+- Add `Stock.get_fx_rate(from, to)` returning the current FX rate between two ISO 4217 currency codes via Yahoo's `<FROM><TO>=X` quote symbol. Returns `1.0` for identity pairs without hitting the API; returns `nil` on error.
+
 ## [0.6.0] - 2026-05-16
 
 - Expose Yahoo's `currency` field in `get_quote` / `get_quotes` results so callers can support multi-currency portfolios

@@ -10,6 +10,7 @@ module YahooFinanceClient
     QUOTE_PATH = "/v7/finance/quote"
     CHART_PATH = "/v8/finance/chart"
     SEARCH_PATH = "/v1/finance/search"
+    QUOTE_SUMMARY_PATH = "/v10/finance/quoteSummary"
     SEARCH_BASE_URL = "https://query1.finance.yahoo.com"
     CACHE_TTL = 300
     MAX_RETRIES = 2
@@ -48,6 +49,17 @@ module YahooFinanceClient
 
         cache_key = "fx_#{from}_#{to}"
         fetch_from_cache(cache_key) || fetch_and_cache_fx_rate(cache_key, from, to)
+      end
+
+      # Fetch the sector and industry for a single ticker via Yahoo's
+      # quoteSummary endpoint (`assetProfile` module). Returns nil for funds,
+      # ETFs, or any symbol where Yahoo doesn't expose an asset profile.
+      #
+      # @param symbol [String] stock ticker
+      # @return [Hash{Symbol => String}, nil] { sector:, industry: } or nil
+      def get_quote_summary(symbol)
+        cache_key = "quote_summary_#{symbol}"
+        fetch_from_cache(cache_key) || fetch_and_cache_quote_summary(cache_key, symbol)
       end
 
       # Search the Yahoo Finance autocomplete index for matching symbols.
@@ -231,6 +243,45 @@ module YahooFinanceClient
 
         rate = JSON.parse(response.body).dig("quoteResponse", "result", 0, "regularMarketPrice")
         rate&.to_f
+      rescue JSON::ParserError
+        nil
+      end
+
+      def fetch_and_cache_quote_summary(cache_key, symbol)
+        profile = fetch_quote_summary_data(symbol)
+        store_in_cache(cache_key, profile) if profile
+        profile
+      end
+
+      def fetch_quote_summary_data(symbol)
+        retries = 0
+        begin
+          parse_quote_summary_response(make_quote_summary_request(symbol))
+        rescue AuthenticationError
+          retries += 1
+          retry if retries <= MAX_RETRIES
+          nil
+        end
+      end
+
+      def make_quote_summary_request(symbol)
+        session = Session.instance
+        session.ensure_authenticated
+        url = "#{session.base_url}#{QUOTE_SUMMARY_PATH}/#{symbol}?modules=assetProfile&crumb=#{session.crumb}"
+        HTTParty.get(url, headers: { "User-Agent" => Session::USER_AGENT, "Cookie" => session.cookie })
+      end
+
+      def parse_quote_summary_response(response)
+        if auth_error?(response)
+          Session.instance.invalidate!
+          raise AuthenticationError, "Authentication failed"
+        end
+        return nil unless response.success?
+
+        profile = JSON.parse(response.body).dig("quoteSummary", "result", 0, "assetProfile")
+        return nil if profile.nil? || profile["sector"].to_s.empty?
+
+        { sector: profile["sector"], industry: profile["industry"] }
       rescue JSON::ParserError
         nil
       end

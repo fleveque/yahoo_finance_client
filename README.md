@@ -84,6 +84,16 @@ YahooFinanceClient::Stock.get_fx_rate("EUR", "USD")
 
 Identity pairs short-circuit to `1.0` without hitting the API. Returns `nil` on any upstream error.
 
+### Sector / Industry
+
+Fetch the sector and industry for a ticker via Yahoo's `quoteSummary` endpoint:
+```ruby
+YahooFinanceClient::Stock.get_quote_summary("AAPL")
+# => { sector: "Technology", industry: "Consumer Electronics" }
+```
+
+Returns `nil` for funds, ETFs, or any symbol whose `assetProfile` is empty. Sector data changes rarely — cache aggressively on the caller side.
+
 ### Dividend History
 
 Fetch historical dividend payments via the chart API:

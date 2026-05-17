@@ -649,6 +649,104 @@ RSpec.describe YahooFinanceClient::Stock do
     end
   end
 
+  describe ".get_quote_summary" do
+    let(:base_url) { "https://query1.finance.yahoo.com" }
+    let(:cookie_url) { "https://fc.yahoo.com" }
+    let(:crumb_url) { "https://query1.finance.yahoo.com/v1/test/getcrumb" }
+    let(:cookie) { "test_cookie" }
+    let(:crumb) { "test_crumb" }
+    let(:session) { YahooFinanceClient::Session.instance }
+    let(:profile_url) { "#{base_url}/v10/finance/quoteSummary/AAPL?modules=assetProfile&crumb=#{crumb}" }
+
+    before do
+      described_class.instance_variable_set(:@cache, {})
+      session.send(:reset!)
+      stub_request(:get, cookie_url).to_return(status: 200, headers: { "set-cookie" => cookie })
+      stub_request(:get, crumb_url).with(headers: { "Cookie" => cookie }).to_return(status: 200, body: crumb)
+    end
+
+    context "when Yahoo returns a valid asset profile" do
+      let(:response_body) do
+        {
+          "quoteSummary" => {
+            "result" => [
+              {
+                "assetProfile" => {
+                  "sector" => "Technology",
+                  "industry" => "Consumer Electronics"
+                }
+              }
+            ]
+          }
+        }.to_json
+      end
+
+      before { stub_request(:get, profile_url).to_return(status: 200, body: response_body) }
+
+      it "returns the sector and industry" do
+        expect(described_class.get_quote_summary("AAPL")).to eq(sector: "Technology", industry: "Consumer Electronics")
+      end
+
+      it "caches the response" do
+        described_class.get_quote_summary("AAPL")
+        described_class.get_quote_summary("AAPL")
+        expect(WebMock).to have_requested(:get, profile_url).once
+      end
+    end
+
+    context "when Yahoo returns no asset profile (ETF / fund)" do
+      let(:response_body) { { "quoteSummary" => { "result" => [{}] } }.to_json }
+
+      before { stub_request(:get, profile_url).to_return(status: 200, body: response_body) }
+
+      it "returns nil" do
+        expect(described_class.get_quote_summary("AAPL")).to be_nil
+      end
+
+      it "does not cache the nil result" do
+        described_class.get_quote_summary("AAPL")
+        cache = described_class.instance_variable_get(:@cache)
+        expect(cache).not_to have_key("quote_summary_AAPL")
+      end
+    end
+
+    context "when assetProfile has empty sector" do
+      let(:response_body) do
+        { "quoteSummary" => { "result" => [{ "assetProfile" => { "sector" => "", "industry" => "" } }] } }.to_json
+      end
+
+      before { stub_request(:get, profile_url).to_return(status: 200, body: response_body) }
+
+      it "returns nil" do
+        expect(described_class.get_quote_summary("AAPL")).to be_nil
+      end
+    end
+
+    context "when Yahoo returns a non-success response" do
+      before { stub_request(:get, profile_url).to_return(status: 500, body: "boom") }
+
+      it "returns nil" do
+        expect(described_class.get_quote_summary("AAPL")).to be_nil
+      end
+    end
+
+    context "when the response body is not valid JSON" do
+      before { stub_request(:get, profile_url).to_return(status: 200, body: "<html>nope</html>") }
+
+      it "returns nil" do
+        expect(described_class.get_quote_summary("AAPL")).to be_nil
+      end
+    end
+
+    context "when authentication fails after max retries" do
+      before { stub_request(:get, profile_url).to_return(status: 401, body: "unauthorized") }
+
+      it "returns nil" do
+        expect(described_class.get_quote_summary("AAPL")).to be_nil
+      end
+    end
+  end
+
   describe ".get_quotes" do
     let(:base_url) { "https://query1.finance.yahoo.com" }
     let(:cookie_url) { "https://fc.yahoo.com" }
